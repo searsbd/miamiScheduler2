@@ -2,12 +2,21 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import { CourseInstance } from './interfaces/Section';
 
+/**
+ * The full pipeline that gets the columns to be scraped, scrapes them,
+ * then parses them.
+ */
 async function main(): Promise<void> {
   await getInitialScrape();
   parseClassTypes();
   await getIndividualScrapes();
+  parseIndividuallyScrapedFiles();
 }
 
+/**
+ * Gets and saves the html for the 100+ individual department
+ * class lists.
+ */
 async function getIndividualScrapes(): Promise<void> {
   const pythonScriptPath = './all_courses_scrape.py';
   const mainScraper = spawn('python', [pythonScriptPath]);
@@ -22,6 +31,10 @@ async function getIndividualScrapes(): Promise<void> {
   });
 }
 
+/**
+ * Gets the initial scrape of the course list so we know which departments
+ * to query.
+ */
 async function getInitialScrape(): Promise<void> {
   const pythonScriptPath = './initial_scrape.py';
   const initialColumnGetter = spawn('python', [pythonScriptPath]);
@@ -36,6 +49,10 @@ async function getInitialScrape(): Promise<void> {
   });
 }
 
+/**
+ * Takes the first scraped html file ("course_headers.html") and scrapes all of the departments
+ * that classes are associated with.
+ */
 function parseClassTypes(): void {
   let firstHTML: string = "";
   try {
@@ -57,6 +74,11 @@ function parseClassTypes(): void {
   fs.writeFileSync('intermediary/class_codes.json', valueStringForm);
 }
 
+/**
+ * Parses all of the 100+ ish individually scraped files that contain
+ * the information about the courses and writes them to a file called
+ * "class_objects.json".
+ */
 function parseIndividuallyScrapedFiles(): void {
   let classTypesString: string = "";
   try {
@@ -76,6 +98,13 @@ function parseIndividuallyScrapedFiles(): void {
   fs.writeFileSync('class_objects.json', allClassesString);
 }
 
+/**
+ * For a given department, gets all the CourseInstances associated with it.
+ * 
+ * @param fileName The file name to be read
+ * @param department The department for this class.
+ * @returns all the courses associated with this department.
+ */
 function parseIndividualHtmlWithClassInfo(fileName: string, department: string): CourseInstance[] {
   let htmlText: string = "";
   try {
@@ -91,6 +120,14 @@ function parseIndividualHtmlWithClassInfo(fileName: string, department: string):
   return returned;
 }
 
+/**
+ * Given the raw html table row for this class, parse its information
+ * and return it as a CourseInstance object.
+ * 
+ * @param html The html containing all the information for this class.
+ * @param department The department of this class (ex "CSE")
+ * @returns Pretty much all the information about this class instance.
+ */
 function extractCourseInfo(html: string, department: string): CourseInstance {
   const splitByItem: string[] = html.split('</td>');
   const courseNum: string | null = rawInfoToString(splitByItem[1]);
@@ -118,6 +155,14 @@ function extractCourseInfo(html: string, department: string): CourseInstance {
   return returned as CourseInstance;
 }
 
+/**
+ * TODO: FIX FOR THE ONLINE AND HYBRID VERSIONS.
+ * Takes the schedule information for a given object and
+ * adds it to the object.
+ * 
+ * @param param The object to add the schedule information to.
+ * @param fullScheduleStuff The schedule information
+ */
 function parseSchedulePart(param:object, fullScheduleStuff: string | null): void {
   const splitSchedule: string[] = (fullScheduleStuff ?? "").split(" ");
   const daysOfWeek: string[] = getDaysOfWeek(splitSchedule[0]);
@@ -137,6 +182,13 @@ function parseSchedulePart(param:object, fullScheduleStuff: string | null): void
   param["endDate"] = endDate;
 }
 
+/**
+ * For a given date gets the time since midnight in minutes.
+ * 
+ * @param timeStr For a a date of the form "11:00pm" gets the time
+ * since midnight in minutes
+ * @returns the time since midnight in minutes.
+ */
 function timeToMinutesSinceMidnight(timeStr: string): number | null {
     try {
       const period = timeStr.slice(-2).toLowerCase();
@@ -155,6 +207,14 @@ function timeToMinutesSinceMidnight(timeStr: string): number | null {
     }
 }
 
+/**
+ * Given the first letter of the days of the week that a class happens
+ * in string form, gets the full names.
+ * 
+ * @param s The string containing the days of the week in the form
+ * "MTWRF"
+ * @returns The string array form of all of the full days of the week.
+ */
 function getDaysOfWeek(s: string): string[] {
   const returned: string[] = [];
   if (s.includes("M")) {
@@ -175,6 +235,11 @@ function getDaysOfWeek(s: string): string[] {
   return returned;
 }
 
+/**
+ * 
+ * @param rawInfo The html form of the one element of the table row for the class
+ * @returns the trimmed and proper whitespace version of the 
+ */
 function rawInfoToString(rawInfo: string): string | null {
   const regex = /<td\b[^>]*>(.*)/g;
   const rawInfoPoint: string = rawInfo.replace(/\s+/g, " ");
@@ -187,4 +252,6 @@ function rawInfoToString(rawInfo: string): string | null {
 
 //main();
 
+
+// TO DO, adjust the schedule stuff for hybrid and online asynchronous classes.
 parseIndividuallyScrapedFiles();
