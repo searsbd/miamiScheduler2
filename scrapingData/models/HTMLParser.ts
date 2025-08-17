@@ -103,16 +103,17 @@ export class HTMLParser {
             //console.log(fullScheduleStuff);
             return;
         }
-
         // like the typical face to face regex but does not require a room number.
         const noRoomRegex: RegExp = /^(?:M?T?W?R?F?S?)\s(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)-(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)\s[A-Za-z]+\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])$/;
         if (noRoomRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseNoRoomFaceToFace(param, fullScheduleStuff);
             return;
         }
 
         // Regex to see if something is just a single date range.
         const dateOnlyRegex: RegExp = /^(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])$/;
         if (dateOnlyRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseDateOnly(param, fullScheduleStuff)
             return;
         }
 
@@ -176,10 +177,14 @@ export class HTMLParser {
         if (webFirstHybridAsync.test(fullScheduleStuff)) {
             return;
         }
+
+        
 //         console.log(`Delivery type: ${param["delivery"]}
 // ${fullScheduleStuff}
 // ______________________________________________________________________________________________`);
-        //console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]} ${param["campus"]}`);
+        // console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]} ${param["campus"]} ${param["delivery"]}`);
+        // console.log(fullScheduleStuff);
+        // console.log("___________________________________________")
         //console.log("1");
     }
 
@@ -272,9 +277,7 @@ export class HTMLParser {
             const inPersonInfo: object = HTMLParser.parseTypicalFaceToFace(param, courseInstances[i], false)
             instances.push(inPersonInfo);
         }
-        console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]}`);
         param["parsed_schedule"] = instances;
-        console.log(instances);
         return instances;
     }
 
@@ -299,6 +302,61 @@ export class HTMLParser {
             startTime: startTime,
             endTime: endTime,
             isWeb: true,
+            startDate: startDate,
+            endDate: endDate
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
+    }
+
+    /**
+     * Parses the schedule information for a schedule that is the same as a typical face to face but does not
+     * include a room number
+     * 
+     * @param param The object to add to
+     * @param fullScheduleStuff The full schedule information for this object, this is the same as the typical
+     * face to face but does not include a room number
+     * @param addToObject boolean to control whether or not to add it to the object in array form.
+     * @returns The non arr wrapped object.
+     */
+    private static parseNoRoomFaceToFace(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const building: string = scheduleParts[2];
+        const startDate: string = scheduleParts[3];
+        const endDate: string = scheduleParts[5];
+        const nonArrWrapped: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            building: building,
+            startDate: startDate,
+            endDate: endDate
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
+    }
+
+    /**
+     * Parses the date of a fullScheduleInfo that is just a date.
+     * 
+     * @param param The object to add to
+     * @param fullScheduleStuff the schedule information that only includes the date range
+     * @param addToObject whether or not to add it do param
+     * @returns the non arr wrapped date info.
+     */
+    private static parseDateOnly(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        console.log(fullScheduleStuff)
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        const startDate: string = scheduleParts[0];
+        const endDate: string = scheduleParts[2];
+        const nonArrWrapped: object = {
             startDate: startDate,
             endDate: endDate
         };
