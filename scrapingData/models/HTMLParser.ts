@@ -1,3 +1,4 @@
+import { start } from "repl";
 import { CourseInstance } from "./CourseInstance";
 import * as fs from 'fs';
 
@@ -76,7 +77,7 @@ export class HTMLParser {
         // Regex to check if something follows the typical format of a typical face to face of the days of the week, then the times, then building, room, dates
         const typicalFaceToFaceRegex: RegExp = /^(?:M?T?W?R?F?S?)\s([1-9]|1[0-2]):[0-5]\d(?:am|pm)-([1-9]|1[0-2]):[0-5]\d(?:am|pm)\s[A-Za-z]+\s[A-Za-z0-9]+\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])$/;
         if (typicalFaceToFaceRegex.test(fullScheduleStuff)) {
-            //parseTypicalFaceToFace(param, fullScheduleStuff);
+            HTMLParser.parseTypicalFaceToFace(param, fullScheduleStuff);
             return;
         }
 
@@ -84,6 +85,7 @@ export class HTMLParser {
         // class that isnt a spring
         const typicalOnlineAsyncRegex: RegExp = /^WEB\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])$/;
         if (typicalOnlineAsyncRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseTypicalOnlineAsync(param, fullScheduleStuff);
             return;
         }
 
@@ -92,10 +94,12 @@ export class HTMLParser {
         // The date can be different though.
         const sprintOnlineAsyncRegex: RegExp = /^WEB\s<strong>\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s<small aria-label="Sprint Course">\(\SPRINT COURSE\)<\/small><\/strong>$/;
         if (sprintOnlineAsyncRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseSpringOnlineAsync(param, fullScheduleStuff);
             return;
         }
         
         if (this.isTypicalSyncClass(fullScheduleStuff)) {
+            HTMLParser.parseTypicalSyncClass(param, fullScheduleStuff);
             //console.log(fullScheduleStuff);
             return;
         }
@@ -167,11 +171,141 @@ export class HTMLParser {
         if (locationSpecifiedOnceRegex.test(fullScheduleStuff)) {
             return;
         }
+
+        const webFirstHybridAsync: RegExp = /^WEB \d{2}\/\d{2} - \d{2}\/\d{2}(?: <hr> [MTWRFS]+ \d{1,2}:\d{2}(?:am|pm)-\d{1,2}:\d{2}(?:am|pm) \S+ \S+ \d{2}\/\d{2} - \d{2}\/\d{2})+$/;
+        if (webFirstHybridAsync.test(fullScheduleStuff)) {
+            return;
+        }
 //         console.log(`Delivery type: ${param["delivery"]}
 // ${fullScheduleStuff}
 // ______________________________________________________________________________________________`);
-        console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]} ${param["campus"]}`);
+        //console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]} ${param["campus"]}`);
         //console.log("1");
+    }
+
+    /**
+     * Parses the information for an object that is of the typical format for a 
+     * 
+     * @param param The object to add the parsed schedule to.
+     * @param fullScheduleStuff The full schedule information for this object.
+     * @returns The full parsed information for this object not in array form
+     */
+    private static parseTypicalFaceToFace(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const building: string = scheduleParts[2];
+        const room: string = scheduleParts[3];
+        const startDate: string = scheduleParts[4];
+        const endDate: string = scheduleParts[6];
+        const nonArrWrapped: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            building: building,
+            room: room,
+            startDate: startDate,
+            endDate: endDate
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
+    }
+
+    /**
+     * adds the parsed info for a web class with only a date range to param as an array
+     * and returns the non arr object.
+     * 
+     * @param param The object to add schedule information to.
+     * @param fullScheduleStuff The full schedule information
+     * @returns The unwrapped schedule info.
+     */
+    private static parseTypicalOnlineAsync(param: object, fullScheduleStuff: string): object {
+        const split: string[] = fullScheduleStuff.split(" ");
+        const nonArrWrapped: object = {
+            isWeb: true,
+            startDate: split[1],
+            endDate: split[3]
+        };
+        param["parsed_schedule"] = [nonArrWrapped];
+        return nonArrWrapped;
+    }
+
+    /**
+     * adds the parsed info for a web sprint class with only a date range to param as an array
+     * and returns the non arr object.
+     * 
+     * @param param the object to add info to
+     * @param fullScheduleStuff full schedule info for the obj
+     * @returns the unwrapped obj of info.
+     */
+    private static parseSpringOnlineAsync(param: object, fullScheduleStuff: string): object {
+        const split: string[] = fullScheduleStuff.split(" ");
+        const nonArrWrapped: object = {
+            isWeb: true,
+            startDate: split[2],
+            endDate: split[4],
+            isSprint: true
+        };
+        param["parsed_schedule"] = [nonArrWrapped];
+        return nonArrWrapped;
+    }
+
+    /**
+     * For a class that has all the info for multiple sections of a class this is where it is parsed.
+     * 
+     * @param param the object to parse information about
+     * @param fullScheduleStuff the schedule for that object
+     * @returns all the parsed info.
+     */
+    private static parseTypicalSyncClass(param: object, fullScheduleStuff: string): object[] {
+        const courseInstances: string[] = fullScheduleStuff.split("<hr>").map(instance => instance.trim());
+        const instances: object[] = [];
+        for (let i = 0; i < courseInstances.length; i++) {
+            if (courseInstances[i].includes("WEB")) {
+                const info: object = HTMLParser.fullInfoWebParser(param, courseInstances[i], false);
+                instances.push(info);
+                continue;
+            }
+            const inPersonInfo: object = HTMLParser.parseTypicalFaceToFace(param, courseInstances[i], false)
+            instances.push(inPersonInfo);
+        }
+        console.log(`${param["department"]} ${param["courseNum"]} ${param["section"]}`);
+        param["parsed_schedule"] = instances;
+        console.log(instances);
+        return instances;
+    }
+
+    /**
+     * Gets info for schedule section with otherwise full info but contains WEB instead of
+     * building and room number.
+     * 
+     * @param param The object to add info to
+     * @param instance the info about this section to be added
+     * @param addToObject whether or not to add it directly to the object as array
+     * @returns non array form of info
+     */
+    private static fullInfoWebParser(param: object, instance: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = instance.split(" ");
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const startDate: string = scheduleParts[3];
+        const endDate: string = scheduleParts[5];
+        const nonArrWrapped: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            isWeb: true,
+            startDate: startDate,
+            endDate: endDate
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
     }
 
     // == ----------------------------------- HELPER ---------------------------------------- == //
@@ -244,6 +378,8 @@ export class HTMLParser {
         }
         if (s.includes("F")) {
             returned.push("Friday");
+        } if (s.includes("S")) {
+            returned.push("Other");
         }
         return returned;
     }

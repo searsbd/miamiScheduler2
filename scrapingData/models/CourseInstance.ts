@@ -79,7 +79,7 @@ export interface CourseInstance {
     /**
      * The room number in which the course takes place, if it exists.
      */
-    roomNumber: number;
+    roomNumber: string;
 
     /**
      * The start date of the class.
@@ -94,5 +94,10 @@ export interface CourseInstance {
     /**
      * True if the class is a sprint course, false otherwise.
      */
-    isSpring: boolean;
+    isSprint: boolean;
+
+    /**
+     * true if the course is a web class.
+     */
+    isWeb: boolean;
 }
