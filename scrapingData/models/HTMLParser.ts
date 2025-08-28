@@ -121,24 +121,43 @@ export class HTMLParser {
         // there can be multiple repears of weekday, time, building, room, date range, <hr> before WEB date.
         const typicalHybridAsyncRegex = /^(?:(?:M?T?W?R?F?S?)\s(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)-(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)\s[A-Za-z]+\s[A-Za-z0-9]+\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s<hr>\s)+WEB\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])$/;
         if (typicalHybridAsyncRegex.test(fullScheduleStuff)) {
+            const splitSchedule: string[] = fullScheduleStuff.split("<hr>").map((elem) => elem.trim());
+            const allInstances: object[] = []
+            for (let i = 0; i <splitSchedule.length; i++) {
+                const obj: object = HTMLParser.parseTypicalFaceToFace(param, splitSchedule[i], false);
+                allInstances.push(obj);
+            }
+            const webSplit: string[] = splitSchedule[splitSchedule.length - 1].split(" ");
+            const startDate: string = webSplit[1];
+            const endDate: string = webSplit[3];
+            const webInstance: object = {
+                startDate: startDate,
+                endDate: endDate,
+                isWeb: true
+            };
+            allInstances.push(webInstance);
+            param["parsed_schedule"] = allInstances;
             return;
         }
 
         // Regex for parsing a face to face class that is also a spring.
-        const faceToFaceSpringRegex: RegExp = /^([MTWRFS]+) (\d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm)) ([A-Za-z]+) ([A-Za-z0-9]+) <strong> (\d{2}\/\d{2} - \d{2}\/\d{2}) <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
-        if (faceToFaceSpringRegex.test(fullScheduleStuff)) {
+        const faceToFaceSprintRegex: RegExp = /^([MTWRFS]+) (\d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm)) ([A-Za-z]+) ([A-Za-z0-9]+) <strong> (\d{2}\/\d{2} - \d{2}\/\d{2}) <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
+        if (faceToFaceSprintRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseSprintFaceToFace(param, fullScheduleStuff);
             return;
         }
 
         // Regular face to face class but with multiple classes and maybe times im not sure
         const faceToFaceMultipleRooms: RegExp = /^([MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ \d{2}\/\d{2} - \d{2}\/\d{2})( <hr> [MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ \d{2}\/\d{2} - \d{2}\/\d{2})*$/;
         if (faceToFaceMultipleRooms.test(fullScheduleStuff)) {
+            HTMLParser.parseFaceToFaceMultipleRooms(param, fullScheduleStuff);
             return;
         }
 
         // Starts with the in person class then goes into the web class. Is a sprint course as well and is hybrid async
         const hybridAsyncInPersonFirstSprintRegex: RegExp = /^[MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong> <hr> WEB <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
         if (hybridAsyncInPersonFirstSprintRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseHybridAsyncLeadInperson(param, fullScheduleStuff)
             return;
         }
 
@@ -186,6 +205,113 @@ export class HTMLParser {
         // console.log(fullScheduleStuff);
         // console.log("___________________________________________")
         //console.log("1");
+    }
+
+    /**
+     * Parses the schedule for an object that starts with the inperson and has a web version for an hybrid
+     * async sprint class
+     * 
+     * @param param All the information about the class
+     * @param fullScheduleStuff The schedule information for this class
+     * @param addToObject Whether or not to add the parsed schedule to the param
+     * @returns the parsed schedule
+     */
+    private static parseHybridAsyncLeadInperson(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        console.log(scheduleParts);
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const building: string = scheduleParts[2];
+        const room: string = scheduleParts[3];
+        const startDate: string = scheduleParts[5];
+        const endDate: string = scheduleParts[7];
+        const scheduleObjs: object[] = [];
+        const inPerson: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            startDate: startDate,
+            endDate: endDate,
+            building: building,
+            room: room,
+            isSprint: true
+        }
+        scheduleObjs.push(inPerson);
+        const web: object = {
+            isWeb: true,
+            isSprint: true,
+            startDate: startDate,
+            endDate: endDate
+        }
+        scheduleObjs.push(web);
+        if (addToObject) {
+            param["parsed_schedule"] = scheduleObjs;
+        }
+        console.log(scheduleObjs);
+        return scheduleObjs;
+    }
+
+
+    /**
+     * Parses something of the format:
+     * MW 2:50pm-3:45pm HUG 315 08/25 - 12/12 <hr> T 12:10pm-2:00pm GAR 052B 08/25 - 12/12
+     * 
+     * basically just the typical face to face just back to back.
+     * 
+     * @param param The object containing all the info for this specific class and section
+     * @param fullScheduleStuff contains the full schedule information for this class
+     * separated by <hr>
+     * @param addToObject Whether or not to add the parsed schedule to the param
+     * @returns The parsed object.
+     */
+    private static parseFaceToFaceMultipleRooms(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const schedules: object[] = [];
+        const splitFullSchedule: string[] = fullScheduleStuff.split("<hr>").map(part => part.trim());
+        for (const part of splitFullSchedule) {
+            const objToAdd: object = HTMLParser.parseTypicalFaceToFace(param, part, false);
+            schedules.push(objToAdd);
+        }
+        if (addToObject) {
+            param["parsed_schedule"] = schedules;
+        }
+        return schedules;
+    }
+
+
+    /**
+     * Parses a typical face to face sprint class of the general format:
+     * MW 10:05am-11:25am PBD 121 <strong> 10/08 - 12/12 <small aria-label="Sprint Course">(SPRINT COURSE)</small></strong>
+     * 
+     * @param param The object to add the schedule to
+     * @param fullScheduleStuff The schedule information for this sprint face to face class.
+     * @param addToObject optional parameter defaulted to true about whether or not to add the
+     * parsed schedule information to the object
+     * @returns The parsed schedule information for this class.
+     */
+    private static parseSprintFaceToFace(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const building: string = scheduleParts[2];
+        const room: string = scheduleParts[3];
+        const startDate: string = scheduleParts[5];
+        const endDate: string = scheduleParts[7];
+        const nonArrWrapped: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            building: building,
+            room: room,
+            startDate: startDate,
+            endDate: endDate,
+            isSprint: true
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
     }
 
     /**
@@ -352,7 +478,6 @@ export class HTMLParser {
      * @returns the non arr wrapped date info.
      */
     private static parseDateOnly(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
-        console.log(fullScheduleStuff)
         const scheduleParts: string[] = fullScheduleStuff.split(" ");
         const startDate: string = scheduleParts[0];
         const endDate: string = scheduleParts[2];
@@ -396,20 +521,6 @@ export class HTMLParser {
         const block = String.raw`(?:M?T?W?R?F?S?)\s(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)-(?:[1-9]|1[0-2]):[0-5]\d(?:am|pm)\s(?:WEB|[A-Za-z]+\s\d+)\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\s-\s(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])`;
         const pattern = new RegExp(`^${block}(?:\\s<hr>\\s${block})*$`);
         return pattern.test(input);
-    }
-
-
-    private static readonly dateRegex: RegExp = /(\d{2}\/\d{2})\s*-\s*(\d{2}\/\d{2})/;
-
-    /**
-     * TODO
-     * 
-     * @param param 
-     * @param fullScheduleStuff 
-     */
-    private static doDateRegexParse(param: object, fullScheduleStuff: string) {
-        const match = fullScheduleStuff.match(this.dateRegex);
-
     }
 
     /**
