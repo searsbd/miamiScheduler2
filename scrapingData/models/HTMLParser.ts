@@ -162,8 +162,9 @@ export class HTMLParser {
         }
 
         // Starts with web then goes in person. Is a sprint course as well and is hybrid async
-        const hybridAsyncWebFirstSprintRegex = /^[MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) WEB <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong> <hr> [MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
-        if (hybridAsyncWebFirstSprintRegex.test(fullScheduleStuff)) {
+        const hybridSyncWebFirstSprintRegex = /^[MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) WEB <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong> <hr> [MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
+        if (hybridSyncWebFirstSprintRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseHybridSyncLeadWeb(param, fullScheduleStuff)
             return;
         }
 
@@ -208,6 +209,55 @@ export class HTMLParser {
     }
 
     /**
+     * Parses schedule information of this format:
+     * M 6:00pm-8:05pm WEB <strong> 10/22 - 12/12 <small aria-label="Sprint Course">(SPRINT COURSE)</small></strong> <hr> M 6:00pm-8:05pm CPA 114 <strong> 10/22 - 12/12 <small aria-label="Sprint Course">(SPRINT COURSE)</small></strong>
+     * 
+     * @param param The object containing all info for this object.
+     * @param fullScheduleStuff The above schedule information containing times
+     * @param addToObject whether or not to add the parsed schedule to param
+     * @returns The parsed schedule in ob
+     */
+    private static parseHybridSyncLeadWeb(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
+        const scheduleHalves: string[] = fullScheduleStuff.split("<hr>").map(part => part.trim());
+        const splitFirstHalf: string[] = scheduleHalves[0].split(" ");
+        const splitSecondHalf: string[] = scheduleHalves[1].split(" ");
+        const daysOfWeekWeb: string[] = HTMLParser.getDaysOfWeek(splitFirstHalf[0]);
+        const daysOfWeekFTF: string[] = HTMLParser.getDaysOfWeek(splitSecondHalf[0]);
+        const startTimeWeb: string = splitFirstHalf[1].split("-")[0];
+        const endTimeWeb: string = splitFirstHalf[1].split("-")[1];
+        const startTimeFTF: string = splitSecondHalf[1].split("-")[0];
+        const endTimeFTF: string = splitSecondHalf[1].split("-")[1];
+        const ftfBuilding: string = splitSecondHalf[2];
+        const ftfRoom: string = splitSecondHalf[3];
+        const startDate: string = splitSecondHalf[5];
+        const endDate: string = splitSecondHalf[7];
+        const webObj: object = {
+            startDate: startDate,
+            endDate: endDate,
+            startTime: startTimeWeb,
+            endTime: endTimeWeb,
+            daysOfWeek: daysOfWeekWeb,
+            isSprint: true,
+            isWeb: true
+        }
+        const ftfObj: object = {
+            startDate: startDate,
+            endDate: endDate,
+            startTime: startTimeFTF,
+            endTime: endTimeFTF,
+            daysOfWeek: daysOfWeekFTF,
+            isSprint: true,
+            building: ftfBuilding,
+            room: ftfRoom
+        }
+        const objArr: object[] = [ftfObj, webObj];
+        if (addToObject) {
+            param["parsed_schedule"] = objArr
+        }
+        return objArr;
+    }
+
+    /**
      * Parses the schedule for an object that starts with the inperson and has a web version for an hybrid
      * async sprint class
      * 
@@ -216,9 +266,8 @@ export class HTMLParser {
      * @param addToObject Whether or not to add the parsed schedule to the param
      * @returns the parsed schedule
      */
-    private static parseHybridAsyncLeadInperson(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+    private static parseHybridAsyncLeadInperson(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
         const scheduleParts: string[] = fullScheduleStuff.split(" ");
-        console.log(scheduleParts);
         const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
         const startTime: string = scheduleParts[1].split("-")[0];
         const endTime: string = scheduleParts[1].split("-")[1];
@@ -248,7 +297,6 @@ export class HTMLParser {
         if (addToObject) {
             param["parsed_schedule"] = scheduleObjs;
         }
-        console.log(scheduleObjs);
         return scheduleObjs;
     }
 
@@ -265,7 +313,7 @@ export class HTMLParser {
      * @param addToObject Whether or not to add the parsed schedule to the param
      * @returns The parsed object.
      */
-    private static parseFaceToFaceMultipleRooms(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+    private static parseFaceToFaceMultipleRooms(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
         const schedules: object[] = [];
         const splitFullSchedule: string[] = fullScheduleStuff.split("<hr>").map(part => part.trim());
         for (const part of splitFullSchedule) {
