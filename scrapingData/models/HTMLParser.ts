@@ -171,6 +171,7 @@ export class HTMLParser {
         // Used for sprint online synchronous courses
         const sprintWebSyncRegex: RegExp = /^[MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) WEB <strong> \d{2}\/\d{2} - \d{2}\/\d{2} <small aria-label="Sprint Course">\(SPRINT COURSE\)<\/small><\/strong>$/;
         if (sprintWebSyncRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseSprintWebSync(param, fullScheduleStuff);
             return;
         }
 
@@ -178,6 +179,7 @@ export class HTMLParser {
         // have a room number
         const repeatedWithNoRoomNumRegex: RegExp = /^([MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ \d{2}\/\d{2} - \d{2}\/\d{2})( <hr> [MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ \d{2}\/\d{2} - \d{2}\/\d{2})*$/;
         if (repeatedWithNoRoomNumRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseRepeatedWithNoRoomNum(param, fullScheduleStuff);
             return;
         }
 
@@ -206,6 +208,51 @@ export class HTMLParser {
         // console.log(fullScheduleStuff);
         // console.log("___________________________________________")
         //console.log("1");
+    }
+
+    private static parseRepeatedWithNoRoomNum(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
+        console.log(fullScheduleStuff);
+        const individualTimes: string[] = fullScheduleStuff.split("<hr>").map(line => line.trim());
+        const returned: object[] = [];
+        for (const time of individualTimes) {
+            returned.push(HTMLParser.parseNoRoomFaceToFace(param, time, false));
+        }
+        if (addToObject) {
+            param["parsed_schedule"] = fullScheduleStuff;
+        }
+        return returned;
+    }
+
+    /**
+     * Parses something of the format:
+     * T 5:00pm-7:30pm WEB <strong> 09/08 - 12/12 <small aria-label="Sprint Course">(SPRINT COURSE)</small></strong>
+     * into a readable object.
+     * 
+     * @param param  the object that contains the general class information
+     * @param fullScheduleStuff the string containing the general string information
+     * @param addToObject whether or not to add the parsed schedule to param
+     * @returns the non array wrapped version of the parsed schedule for this section.
+     */
+    private static parseSprintWebSync(param: object, fullScheduleStuff: string, addToObject: boolean = true): object {
+        const scheduleParts: string[] = fullScheduleStuff.split(" ");
+        const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+        const startTime: string = scheduleParts[1].split("-")[0];
+        const endTime: string = scheduleParts[1].split("-")[1];
+        const startDate: string = scheduleParts[4];
+        const endDate: string = scheduleParts[6];
+        const nonArrWrapped: object = {
+            daysOfWeek: daysOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            startDate: startDate,
+            endDate: endDate,
+            isSprint: true,
+            isWeb: true
+        };
+        if (addToObject) {
+            param["parsed_schedule"] = [nonArrWrapped];
+        }
+        return nonArrWrapped;
     }
 
     /**
