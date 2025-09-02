@@ -186,6 +186,7 @@ export class HTMLParser {
         // includes single date.
         const mixedDateScheduleRegex = /^([MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ (\d{2}\/\d{2} - \d{2}\/\d{2}|\d{2}\/\d{2}))( <hr> [MTWRFS]+ \d{1,2}:\d{2}(am|pm)-\d{1,2}:\d{2}(am|pm) [A-Za-z0-9]+ [A-Za-z0-9]+ (\d{2}\/\d{2} - \d{2}\/\d{2}|\d{2}\/\d{2}))*$/;
         if (mixedDateScheduleRegex.test(fullScheduleStuff)) {
+            HTMLParser.parseMixedDateSchedule(param, fullScheduleStuff);
             return;
         }
 
@@ -210,8 +211,63 @@ export class HTMLParser {
         //console.log("1");
     }
 
+    /**
+     * Parses something of the following format:
+     * 
+     * MW 10:05am-11:25am FSB 0021 08/25 - 12/12 <hr> T 6:00pm-7:20pm FSB 0025 09/23 <hr> T 6:00pm-7:20pm FSB 0025 10/21
+     * 
+     * Where it can be a date range or just a single date.
+     * 
+     * @param param Contains the non schedule information about this section
+     * @param fullScheduleStuff Contains the schedule information for this section
+     * @param addToObject Whether or not to add the parsed schedule to the param
+     * @returns The parsed schedule information.
+     */
+    private static parseMixedDateSchedule(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
+        const splitSchedule: string[] = fullScheduleStuff.split("<hr>").map(part => part.trim());
+        const returned: object[] = [];
+        for (const schedule of splitSchedule) {
+            const parsedSchedulePart: object = {};
+            const scheduleParts: string[] = schedule.split(" ");
+            const daysOfWeek: string[] = HTMLParser.getDaysOfWeek(scheduleParts[0]);
+            const startTime: string = scheduleParts[1].split("-")[0];
+            const endTime: string = scheduleParts[1].split("-")[1];
+            const building: string = scheduleParts[2];
+            const room: string = scheduleParts[3];
+            if (scheduleParts[6]) {
+                const startDate = scheduleParts[4];
+                const endDate = scheduleParts[6];
+                parsedSchedulePart["startDate"] = startDate;
+                parsedSchedulePart["endDate"] = endDate;
+            } else {
+                const soloDate: string = scheduleParts[4];
+                parsedSchedulePart["individualDates"] = soloDate;
+            }
+            parsedSchedulePart["daysOfWeek"] = daysOfWeek;
+            parsedSchedulePart["startTime"] = startTime;
+            parsedSchedulePart["endTime"] = endTime;
+            parsedSchedulePart["building"] = building;
+            parsedSchedulePart["room"] = room;
+            returned.push(parsedSchedulePart);
+        }
+        if (addToObject) {
+            param["parsed_schedule"] = returned;
+        }
+        return returned;
+    }
+
+    /**
+     * Parses something of the following format:
+     * T 3:30pm-5:00pm CHA 08/25 - 12/12 <hr> W 8:45am-10:15am CHA 08/25 - 12/12
+     * 
+     * basically the individual no room parser but can accept mutliple.
+     * 
+     * @param param contains the non schedule information about the class
+     * @param fullScheduleStuff the schedule information for the class
+     * @param addToObject whether or not to add the parsed schedule information to the param
+     * @returns the parsed schedule for all times.
+     */
     private static parseRepeatedWithNoRoomNum(param: object, fullScheduleStuff: string, addToObject: boolean = true): object[] {
-        console.log(fullScheduleStuff);
         const individualTimes: string[] = fullScheduleStuff.split("<hr>").map(line => line.trim());
         const returned: object[] = [];
         for (const time of individualTimes) {

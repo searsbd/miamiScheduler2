@@ -100,4 +100,9 @@ export interface CourseInstance {
      * true if the course is a web class.
      */
     isWeb: boolean;
+
+    /**
+     * If a class has any hardcoded individual dates, this is where they go.
+     */
+    individualDates?: string[];
 }
